@@ -2,348 +2,331 @@ import Float "mo:core/Float";
 import Map "mo:core/Map";
 import Nat "mo:core/Nat";
 import Principal "mo:core/Principal";
-import Array "mo:core/Array";
 import Runtime "mo:core/Runtime";
-import Iter "mo:core/Iter";
-import Text "mo:core/Text";
 import Order "mo:core/Order";
 
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
 actor {
-  // Expense Types
+  // ── V1 types (must match the original schema exactly so Motoko can load
+  //          the old stable data into `userExpenses` on upgrade) ──────────
+  type OldCategory = {
+    #food; #transport; #housing; #entertainment;
+    #health; #shopping; #other;
+  };
+
+  type OldExpense = {
+    id    : Nat;
+    title : Text;
+    amount: Float;
+    category : OldCategory;
+    date  : Text;
+    notes : ?Text;
+  };
+
+  // Same name as the original stable variable → Motoko loads old data here.
+  let userExpenses : Map.Map<Principal, Map.Map<Nat, OldExpense>> = Map.empty();
+
+  // ── V2 types ───────────────────────────────────────────────────────────
   type Category = {
-    #food;
-    #transport;
-    #housing;
-    #entertainment;
-    #health;
-    #shopping;
-    #other;
+    #food; #transport; #housing; #entertainment;
+    #health; #shopping; #other;
+    #apnaMart; #jioMart; #flipkartMinutes; #amazon;
   };
 
   module Category {
-    public func compare(category1 : Category, category2 : Category) : Order.Order {
-      switch (category1, category2) {
-        case (#food, #food) { #equal };
-        case (#food, _) { #less };
-        case (_, #food) { #greater };
-
-        case (#transport, #transport) { #equal };
-        case (#transport, _) { #less };
-        case (_, #transport) { #greater };
-
-        case (#housing, #housing) { #equal };
-        case (#housing, _) { #less };
-        case (_, #housing) { #greater };
-
-        case (#entertainment, #entertainment) { #equal };
-        case (#entertainment, _) { #less };
-        case (_, #entertainment) { #greater };
-
-        case (#health, #health) { #equal };
-        case (#health, _) { #less };
-        case (_, #health) { #greater };
-
-        case (#shopping, #shopping) { #equal };
-        case (#shopping, _) { #less };
-        case (_, #shopping) { #greater };
-
-        case (#other, #other) { #equal };
+    public func compare(a : Category, b : Category) : Order.Order {
+      switch (a, b) {
+        case (#food,            #food)            #equal;
+        case (#food,            _)                #less;
+        case (_,                #food)            #greater;
+        case (#transport,       #transport)       #equal;
+        case (#transport,       _)                #less;
+        case (_,                #transport)       #greater;
+        case (#housing,         #housing)         #equal;
+        case (#housing,         _)                #less;
+        case (_,                #housing)         #greater;
+        case (#entertainment,   #entertainment)   #equal;
+        case (#entertainment,   _)                #less;
+        case (_,                #entertainment)   #greater;
+        case (#health,          #health)          #equal;
+        case (#health,          _)                #less;
+        case (_,                #health)          #greater;
+        case (#shopping,        #shopping)        #equal;
+        case (#shopping,        _)                #less;
+        case (_,                #shopping)        #greater;
+        case (#apnaMart,        #apnaMart)        #equal;
+        case (#apnaMart,        _)                #less;
+        case (_,                #apnaMart)        #greater;
+        case (#jioMart,         #jioMart)         #equal;
+        case (#jioMart,         _)                #less;
+        case (_,                #jioMart)         #greater;
+        case (#flipkartMinutes, #flipkartMinutes) #equal;
+        case (#flipkartMinutes, _)                #less;
+        case (_,                #flipkartMinutes) #greater;
+        case (#amazon,          #amazon)          #equal;
+        case (#amazon,          _)                #less;
+        case (_,                #amazon)          #greater;
+        case (#other,           #other)           #equal;
       };
     };
   };
 
   type Expense = {
-    id : Nat;
+    id    : Nat;
     title : Text;
-    amount : Float;
+    amount: Float;
     category : Category;
-    date : Text;
+    date  : Text;
     notes : ?Text;
   };
 
   module Expense {
-    public func compare(expense1 : Expense, expense2 : Expense) : Order.Order {
-      Nat.compare(expense1.id, expense2.id);
+    public func compare(a : Expense, b : Expense) : Order.Order {
+      Nat.compare(a.id, b.id);
     };
-
-    public func compareByAmount(expense1 : Expense, expense2 : Expense) : Order.Order {
-      Float.compare(expense1.amount, expense2.amount);
+    public func compareByAmount(a : Expense, b : Expense) : Order.Order {
+      Float.compare(a.amount, b.amount);
     };
-
-    public func compareByCategory(expense1 : Expense, expense2 : Expense) : Order.Order {
-      Category.compare(expense1.category, expense2.category);
+    public func compareByCategory(a : Expense, b : Expense) : Order.Order {
+      Category.compare(a.category, b.category);
     };
   };
 
-  // User Profile Type
-  public type UserProfile = {
-    name : Text;
+  public type UserProfile = { name : Text };
+
+  // ── V2 storage (new variable name → starts empty, populated by migration) ──
+  let userExpenses_v2 : Map.Map<Principal, Map.Map<Nat, Expense>> = Map.empty();
+  let userProfiles    : Map.Map<Principal, UserProfile>           = Map.empty();
+  var nextExpenseId   = 0;
+  var _migrated       = false;
+
+  // ── One-time migration after upgrade ────────────────────────────────────
+  system func postupgrade() {
+    if (not _migrated) {
+      userExpenses.entries().forEach(func((principal, oldMap)) {
+        let newMap = Map.empty<Nat, Expense>();
+        oldMap.entries().forEach(func((id, old)) {
+          let cat : Category = switch (old.category) {
+            case (#food)          #food;
+            case (#transport)     #transport;
+            case (#housing)       #housing;
+            case (#entertainment) #entertainment;
+            case (#health)        #health;
+            case (#shopping)      #shopping;
+            case (#other)         #other;
+          };
+          newMap.add(id, {
+            id       = old.id;
+            title    = old.title;
+            amount   = old.amount;
+            category = cat;
+            date     = old.date;
+            notes    = old.notes;
+          });
+        });
+        userExpenses_v2.add(principal, newMap);
+      });
+      _migrated := true;
+    };
   };
 
-  // User Expense Store
-  let userExpenses = Map.empty<Principal, Map.Map<Nat, Expense>>();
-  let userProfiles = Map.empty<Principal, UserProfile>();
-  var nextExpenseId = 0;
-
-  // Authorization - include only into actor, not into unit test actors
+  // ── Authorization ─────────────────────────────────────────────────────────
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // User Profile Functions
+  // ── User Profile ──────────────────────────────────────────────────────────
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+      Runtime.trap("Unauthorized");
     };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
     if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
+      Runtime.trap("Unauthorized");
     };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+      Runtime.trap("Unauthorized");
     };
     userProfiles.add(caller, profile);
   };
 
-  // Helper function to get user expenses (returns empty map if none exist)
-  func getUserExpensesMap(caller : Principal) : Map.Map<Nat, Expense> {
-    switch (userExpenses.get(caller)) {
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  func getMap(caller : Principal) : Map.Map<Nat, Expense> {
+    switch (userExpenses_v2.get(caller)) {
       case (null) {
-        let newMap = Map.empty<Nat, Expense>();
-        userExpenses.add(caller, newMap);
-        newMap;
+        let m = Map.empty<Nat, Expense>();
+        userExpenses_v2.add(caller, m);
+        m;
       };
-      case (?expenses) { expenses };
+      case (?m) { m };
     };
   };
 
-  // Add Expense
+  // ── CRUD ──────────────────────────────────────────────────────────────────
   public shared ({ caller }) func addExpense(expense : Expense) : async Nat {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can add expenses");
+      Runtime.trap("Unauthorized");
     };
-    let newId = nextExpenseId;
+    let id = nextExpenseId;
     nextExpenseId += 1;
-
-    let newExpense : Expense = {
-      expense with id = newId;
-    };
-
-    let expenses = getUserExpensesMap(caller);
-    expenses.add(newId, newExpense);
-    newId;
+    getMap(caller).add(id, { expense with id });
+    id;
   };
 
-  // Update Expense
   public shared ({ caller }) func updateExpense(expense : Expense) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update expenses");
+      Runtime.trap("Unauthorized");
     };
-
-    let expenses = getUserExpensesMap(caller);
-    switch (expenses.get(expense.id)) {
-      case (null) {
-        Runtime.trap("Expense not found");
-      };
-      case (?_) {
-        expenses.add(expense.id, expense);
-      };
+    let m = getMap(caller);
+    switch (m.get(expense.id)) {
+      case (null) { Runtime.trap("Expense not found") };
+      case (?_)   { m.add(expense.id, expense) };
     };
   };
 
-  // Delete Expense
   public shared ({ caller }) func deleteExpense(id : Nat) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete expenses");
+      Runtime.trap("Unauthorized");
     };
-
-    let expenses = getUserExpensesMap(caller);
-    if (not expenses.containsKey(id)) {
-      Runtime.trap("Expense not found");
-    };
-    expenses.remove(id);
+    let m = getMap(caller);
+    if (not m.containsKey(id)) { Runtime.trap("Expense not found") };
+    m.remove(id);
   };
 
-  // Get All Expenses
   public query ({ caller }) func getExpenses() : async ?[Expense] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view expenses");
+      Runtime.trap("Unauthorized");
     };
-    switch (userExpenses.get(caller)) {
+    switch (userExpenses_v2.get(caller)) {
       case (null) { null };
-      case (?expenses) { ?expenses.values().toArray().sort() };
+      case (?m)   { ?m.values().toArray().sort() };
     };
   };
 
-  // Get Expense By ID
   public query ({ caller }) func getExpenseById(id : Nat) : async ?Expense {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view expenses");
+      Runtime.trap("Unauthorized");
     };
-
-    switch (userExpenses.get(caller)) {
+    switch (userExpenses_v2.get(caller)) {
       case (null) { null };
-      case (?expenses) { expenses.get(id) };
+      case (?m)   { m.get(id) };
     };
   };
 
-  // Get Expenses By Category
   public query ({ caller }) func getExpensesByCategory(category : Category) : async [Expense] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view expenses");
+      Runtime.trap("Unauthorized");
     };
-
-    switch (userExpenses.get(caller)) {
+    switch (userExpenses_v2.get(caller)) {
       case (null) { [] };
-      case (?expenses) {
-        expenses.values().toArray().filter(func(expense) { expense.category == category });
-      };
+      case (?m)   { m.values().toArray().filter(func(e) { e.category == category }) };
     };
   };
 
-  // Get Expenses By Amount Range
-  public query ({ caller }) func getExpensesByAmountRange(minAmount : Float, maxAmount : Float) : async [Expense] {
+  public query ({ caller }) func getExpensesByAmountRange(min : Float, max : Float) : async [Expense] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view expenses");
+      Runtime.trap("Unauthorized");
     };
-
-    switch (userExpenses.get(caller)) {
+    switch (userExpenses_v2.get(caller)) {
       case (null) { [] };
-      case (?expenses) {
-        expenses.values().toArray().filter(
-          func(expense) {
-            expense.amount >= minAmount and expense.amount <= maxAmount;
-          }
-        );
+      case (?m)   {
+        m.values().toArray().filter(func(e) { e.amount >= min and e.amount <= max });
       };
     };
   };
 
-  // Core Function - Get Spending Summary
-  type CategorySummary = {
-    category : Category;
-    total : Float;
-  };
+  // ── Summaries ──────────────────────────────────────────────────────────────
+  type CategorySummary = { category : Category; total : Float };
 
   type SpendingSummary = {
     total : Float;
-    food : Float;
-    transport : Float;
-    housing : Float;
-    entertainment : Float;
-    health : Float;
-    shopping : Float;
-    other : Float;
+    food : Float; transport : Float; housing : Float;
+    entertainment : Float; health : Float; shopping : Float; other : Float;
+    apnaMart : Float; jioMart : Float; flipkartMinutes : Float; amazon : Float;
   };
 
   public query ({ caller }) func getSpendingSummary() : async SpendingSummary {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view spending summary");
+      Runtime.trap("Unauthorized");
     };
-    var total = 0.0;
-    var food = 0.0;
-    var transport = 0.0;
-    var housing = 0.0;
-    var entertainment = 0.0;
-    var health = 0.0;
-    var shopping = 0.0;
-    var other = 0.0;
-
-    switch (userExpenses.get(caller)) {
+    var total = 0.0; var food = 0.0; var transport = 0.0;
+    var housing = 0.0; var entertainment = 0.0; var health = 0.0;
+    var shopping = 0.0; var other = 0.0;
+    var apnaMart = 0.0; var jioMart = 0.0;
+    var flipkartMinutes = 0.0; var amazon = 0.0;
+    switch (userExpenses_v2.get(caller)) {
       case (null) {};
-      case (?expenses) {
-        expenses.values().forEach(
-          func(expense) {
-            total += expense.amount;
-            switch (expense.category) {
-              case (#food) { food += expense.amount };
-              case (#transport) { transport += expense.amount };
-              case (#housing) { housing += expense.amount };
-              case (#entertainment) { entertainment += expense.amount };
-              case (#health) { health += expense.amount };
-              case (#shopping) { shopping += expense.amount };
-              case (#other) { other += expense.amount };
-            };
-          }
-        );
+      case (?m) {
+        m.values().forEach(func(e) {
+          total += e.amount;
+          switch (e.category) {
+            case (#food)            { food            += e.amount };
+            case (#transport)       { transport       += e.amount };
+            case (#housing)         { housing         += e.amount };
+            case (#entertainment)   { entertainment   += e.amount };
+            case (#health)          { health          += e.amount };
+            case (#shopping)        { shopping        += e.amount };
+            case (#other)           { other           += e.amount };
+            case (#apnaMart)        { apnaMart        += e.amount };
+            case (#jioMart)         { jioMart         += e.amount };
+            case (#flipkartMinutes) { flipkartMinutes += e.amount };
+            case (#amazon)          { amazon          += e.amount };
+          };
+        });
       };
     };
-
-    {
-      total;
-      food;
-      transport;
-      housing;
-      entertainment;
-      health;
-      shopping;
-      other;
-    };
+    { total; food; transport; housing; entertainment; health; shopping; other;
+      apnaMart; jioMart; flipkartMinutes; amazon };
   };
 
-  // Advanced Queries - Get Expenses By Amount
   public query ({ caller }) func getExpensesSortedByAmount() : async [Expense] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view expenses");
+      Runtime.trap("Unauthorized");
     };
-
-    switch (userExpenses.get(caller)) {
+    switch (userExpenses_v2.get(caller)) {
       case (null) { [] };
-      case (?expenses) { expenses.values().toArray().sort(Expense.compareByAmount) };
+      case (?m)   { m.values().toArray().sort(Expense.compareByAmount) };
     };
   };
 
-  // Advanced Queries - Get Expenses By Category Sorted
   public query ({ caller }) func getExpensesSortedByCategory() : async [Expense] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view expenses");
+      Runtime.trap("Unauthorized");
     };
-
-    switch (userExpenses.get(caller)) {
+    switch (userExpenses_v2.get(caller)) {
       case (null) { [] };
-      case (?expenses) { expenses.values().toArray().sort(Expense.compareByCategory) };
+      case (?m)   { m.values().toArray().sort(Expense.compareByCategory) };
     };
   };
 
-  // Helper Functions
   public query ({ caller }) func getExpensesByCategorySummary() : async [CategorySummary] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view expenses");
+      Runtime.trap("Unauthorized");
     };
-    let categoryTotals = Map.empty<Category, Float>();
-
-    switch (userExpenses.get(caller)) {
+    let totals = Map.empty<Category, Float>();
+    switch (userExpenses_v2.get(caller)) {
       case (null) { return [] };
-      case (?expenses) {
-        expenses.values().forEach(
-          func(expense) {
-            let currentTotal = switch (categoryTotals.get(expense.category)) {
-              case (null) { 0.0 };
-              case (?total) { total };
-            };
-            categoryTotals.add(expense.category, currentTotal + expense.amount);
-          }
-        );
+      case (?m) {
+        m.values().forEach(func(e) {
+          let cur = switch (totals.get(e.category)) {
+            case (null) 0.0;
+            case (?t)   t;
+          };
+          totals.add(e.category, cur + e.amount);
+        });
       };
     };
-
-    // Convert category totals map to array
-    categoryTotals.entries().map(
-      func((category, total)) {
-        {
-          category;
-          total;
-        };
-      }
-    ).toArray().sort(func(summary1, summary2) { Category.compare(summary1.category, summary2.category) });
+    totals.entries()
+      .map(func((cat, tot)) { { category = cat; total = tot } })
+      .toArray()
+      .sort(func(a, b) { Category.compare(a.category, b.category) });
   };
 };

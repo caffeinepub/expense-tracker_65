@@ -106,6 +106,10 @@ export interface SpendingSummary {
     shopping: number;
     housing: number;
     health: number;
+    apnaMart: number;
+    jioMart: number;
+    flipkartMinutes: number;
+    amazon: number;
 }
 export interface UserProfile {
     name: string;
@@ -121,7 +125,11 @@ export enum Category {
     transport = "transport",
     shopping = "shopping",
     housing = "housing",
-    health = "health"
+    health = "health",
+    apnaMart = "apnaMart",
+    jioMart = "jioMart",
+    flipkartMinutes = "flipkartMinutes",
+    amazon = "amazon"
 }
 export enum UserRole {
     admin = "admin",
@@ -478,8 +486,16 @@ function from_candid_variant_n15(_uploadFile: (file: ExternalBlob) => Promise<Ui
     housing: null;
 } | {
     health: null;
+} | {
+    apnaMart: null;
+} | {
+    jioMart: null;
+} | {
+    flipkartMinutes: null;
+} | {
+    amazon: null;
 }): Category {
-    return "other" in value ? Category.other : "entertainment" in value ? Category.entertainment : "food" in value ? Category.food : "transport" in value ? Category.transport : "shopping" in value ? Category.shopping : "housing" in value ? Category.housing : "health" in value ? Category.health : value;
+    return "other" in value ? Category.other : "entertainment" in value ? Category.entertainment : "food" in value ? Category.food : "transport" in value ? Category.transport : "shopping" in value ? Category.shopping : "housing" in value ? Category.housing : "health" in value ? Category.health : "apnaMart" in value ? Category.apnaMart : "jioMart" in value ? Category.jioMart : "flipkartMinutes" in value ? Category.flipkartMinutes : "amazon" in value ? Category.amazon : value;
 }
 function from_candid_variant_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     admin: null;
@@ -543,6 +559,14 @@ function to_candid_variant_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     housing: null;
 } | {
     health: null;
+} | {
+    apnaMart: null;
+} | {
+    jioMart: null;
+} | {
+    flipkartMinutes: null;
+} | {
+    amazon: null;
 } {
     return value == Category.other ? {
         other: null
@@ -558,6 +582,14 @@ function to_candid_variant_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         housing: null
     } : value == Category.health ? {
         health: null
+    } : value == Category.apnaMart ? {
+        apnaMart: null
+    } : value == Category.jioMart ? {
+        jioMart: null
+    } : value == Category.flipkartMinutes ? {
+        flipkartMinutes: null
+    } : value == Category.amazon ? {
+        amazon: null
     } : value;
 }
 function to_candid_variant_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): {

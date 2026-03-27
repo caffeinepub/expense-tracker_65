@@ -16,7 +16,11 @@ export type Category = { 'other' : null } |
   { 'transport' : null } |
   { 'shopping' : null } |
   { 'housing' : null } |
-  { 'health' : null };
+  { 'health' : null } |
+  { 'apnaMart' : null } |
+  { 'jioMart' : null } |
+  { 'flipkartMinutes' : null } |
+  { 'amazon' : null };
 export interface CategorySummary { 'total' : number, 'category' : Category }
 export interface Expense {
   'id' : bigint,
@@ -35,6 +39,10 @@ export interface SpendingSummary {
   'shopping' : number,
   'housing' : number,
   'health' : number,
+  'apnaMart' : number,
+  'jioMart' : number,
+  'flipkartMinutes' : number,
+  'amazon' : number,
 }
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |

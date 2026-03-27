@@ -24,6 +24,10 @@ export interface SpendingSummary {
     shopping: number;
     housing: number;
     health: number;
+    apnaMart: number;
+    jioMart: number;
+    flipkartMinutes: number;
+    amazon: number;
 }
 export interface UserProfile {
     name: string;
@@ -39,7 +43,11 @@ export enum Category {
     transport = "transport",
     shopping = "shopping",
     housing = "housing",
-    health = "health"
+    health = "health",
+    apnaMart = "apnaMart",
+    jioMart = "jioMart",
+    flipkartMinutes = "flipkartMinutes",
+    amazon = "amazon"
 }
 export enum UserRole {
     admin = "admin",

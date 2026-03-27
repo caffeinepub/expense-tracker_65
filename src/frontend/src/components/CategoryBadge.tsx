@@ -30,6 +30,22 @@ const CATEGORY_CONFIG: Record<Category, { label: string; className: string }> =
       label: "Other",
       className: "bg-gray-100 text-gray-600 border-gray-200",
     },
+    [Category.apnaMart]: {
+      label: "Apna Mart",
+      className: "bg-red-100 text-red-700 border-red-200",
+    },
+    [Category.jioMart]: {
+      label: "Jio Mart",
+      className: "bg-cyan-100 text-cyan-700 border-cyan-200",
+    },
+    [Category.flipkartMinutes]: {
+      label: "Flipkart Minutes",
+      className: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    },
+    [Category.amazon]: {
+      label: "Amazon",
+      className: "bg-amber-100 text-amber-700 border-amber-200",
+    },
   };
 
 export function getCategoryConfig(category: Category) {

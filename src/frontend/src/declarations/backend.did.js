@@ -16,6 +16,10 @@ export const Category = IDL.Variant({
   'shopping' : IDL.Null,
   'housing' : IDL.Null,
   'health' : IDL.Null,
+  'apnaMart' : IDL.Null,
+  'jioMart' : IDL.Null,
+  'flipkartMinutes' : IDL.Null,
+  'amazon' : IDL.Null,
 });
 export const Expense = IDL.Record({
   'id' : IDL.Nat,
@@ -44,12 +48,16 @@ export const SpendingSummary = IDL.Record({
   'shopping' : IDL.Float64,
   'housing' : IDL.Float64,
   'health' : IDL.Float64,
+  'apnaMart' : IDL.Float64,
+  'jioMart' : IDL.Float64,
+  'flipkartMinutes' : IDL.Float64,
+  'amazon' : IDL.Float64,
 });
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addExpense' : IDL.Func([Expense], [IDL.Nat], []),
-  'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], []),
   'deleteExpense' : IDL.Func([IDL.Nat], [], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -90,6 +98,10 @@ export const idlFactory = ({ IDL }) => {
     'shopping' : IDL.Null,
     'housing' : IDL.Null,
     'health' : IDL.Null,
+    'apnaMart' : IDL.Null,
+    'jioMart' : IDL.Null,
+    'flipkartMinutes' : IDL.Null,
+    'amazon' : IDL.Null,
   });
   const Expense = IDL.Record({
     'id' : IDL.Nat,
@@ -118,6 +130,10 @@ export const idlFactory = ({ IDL }) => {
     'shopping' : IDL.Float64,
     'housing' : IDL.Float64,
     'health' : IDL.Float64,
+    'apnaMart' : IDL.Float64,
+    'jioMart' : IDL.Float64,
+    'flipkartMinutes' : IDL.Float64,
+    'amazon' : IDL.Float64,
   });
   
   return IDL.Service({

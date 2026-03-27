@@ -29,6 +29,10 @@ const CATEGORIES = [
   { value: Category.entertainment, label: "Entertainment" },
   { value: Category.health, label: "Health" },
   { value: Category.shopping, label: "Shopping" },
+  { value: Category.apnaMart, label: "Apna Mart" },
+  { value: Category.jioMart, label: "Jio Mart" },
+  { value: Category.flipkartMinutes, label: "Flipkart Minutes" },
+  { value: Category.amazon, label: "Amazon" },
   { value: Category.other, label: "Other" },
 ];
 
